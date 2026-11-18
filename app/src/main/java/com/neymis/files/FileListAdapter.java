@@ -29,6 +29,10 @@ final class FileListAdapter extends BaseAdapter {
         void onCheck();
     }
 
+    interface OpenListener {
+        void onOpen(File file);
+    }
+
     static final class Row {
         final String header;
         final File file;
@@ -54,6 +58,7 @@ final class FileListAdapter extends BaseAdapter {
     private final Set<File> selected;
     private final MenuListener menuListener;
     private final CheckListener checkListener;
+    private final OpenListener openListener;
     private final boolean selectionMode;
     private final int textColor;
     private final int subColor;
@@ -61,12 +66,13 @@ final class FileListAdapter extends BaseAdapter {
 
     FileListAdapter(Context context, List<Row> rows, Set<File> selected,
                     MenuListener menuListener, CheckListener checkListener,
-                    boolean selectionMode) {
+                    OpenListener openListener, boolean selectionMode) {
         this.context = context;
         this.rows = rows;
         this.selected = selected;
         this.menuListener = menuListener;
         this.checkListener = checkListener;
+        this.openListener = openListener;
         this.selectionMode = selectionMode;
         int[] colors = resolveColors(context);
         this.textColor = colors[0];
@@ -198,6 +204,7 @@ final class FileListAdapter extends BaseAdapter {
         menu.setColorFilter(subColor);
         menu.setOnClickListener(v -> menuListener.onMenu(file));
         box.addView(menu);
+        box.setOnClickListener(v -> openListener.onOpen(file));
         return box;
     }
 

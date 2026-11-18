@@ -428,8 +428,9 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private View collectionGrid() {
-        String[] names = {"Избранное", "Безопасная папка", "Очистка памяти", "Корзина"};
-        int[] icons = {R.drawable.ic_star, R.drawable.ic_lock, R.drawable.ic_refresh, R.drawable.ic_doc};
+        String[] names = {"Избранное", "Безопасная папка", "Очистка памяти", "Корзина", "Архивы"};
+        int[] icons = {R.drawable.ic_star, R.drawable.ic_lock, R.drawable.ic_refresh,
+                R.drawable.ic_doc, R.drawable.ic_sd};
         return twoColumnGrid(names, icons, new int[]{}, null, names);
     }
 
@@ -506,9 +507,12 @@ public class MainActivity extends AppCompatActivity {
             } else if (index == 2) {
                 detail.setText("Кэш, дубликаты, мусор");
                 card.setOnClickListener(v -> startActivity(new Intent(this, CleanerActivity.class)));
-            } else {
+            } else if (index == 3) {
                 detail.setText("30 дней на восстановление");
                 card.setOnClickListener(v -> startActivity(new Intent(this, TrashActivity.class)));
+            } else {
+                detail.setText("ZIP: распаковка и сжатие");
+                card.setOnClickListener(v -> showArchives());
             }
         } else {
             if (index == 0) {
@@ -548,7 +552,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void about() {
         new AlertDialog.Builder(this).setTitle("Neymis Files")
-                .setMessage("Файловый менеджер с открытым кодом.\nВерсия 1.9\nЛицензия MIT\n"
+                .setMessage("Файловый менеджер с открытым кодом.\nВерсия 2.0\nЛицензия MIT\n"
                         + "Исходники: github.com/s93240056-boop/neymis-files")
                 .setPositiveButton("OK", null).show();
     }
@@ -622,6 +626,14 @@ public class MainActivity extends AppCompatActivity {
                 this::showFileActions, () -> {
                     if (selectionMode) setSelectionMode(false);
                     else selectAll();
+                }, file -> {
+                    if (selectionMode) {
+                        toggleSelected(file);
+                    } else if (file.isDirectory()) {
+                        show(file);
+                    } else {
+                        open(file);
+                    }
                 }, selectionMode);
         if (listView != null) listView.setAdapter(listAdapter);
     }
@@ -733,6 +745,10 @@ public class MainActivity extends AppCompatActivity {
         if (lower.endsWith(".zip")) return "application/zip";
         if (lower.endsWith(".txt") || lower.endsWith(".md")) return "text/plain";
         if (lower.endsWith(".pdf")) return "application/pdf";
+        if (lower.endsWith(".doc") || lower.endsWith(".docx")) return "application/msword";
+        if (lower.endsWith(".xls") || lower.endsWith(".xlsx")) return "application/vnd.ms-excel";
+        if (lower.endsWith(".ppt") || lower.endsWith(".pptx")) return "application/vnd.ms-powerpoint";
+        if (lower.endsWith(".epub")) return "application/epub+zip";
         return "*/*";
     }
 
@@ -1055,6 +1071,25 @@ public class MainActivity extends AppCompatActivity {
                 .setMessage(preview)
                 .setNegativeButton("Отмена", null)
                 .setPositiveButton("Распаковать", (dialog, which) -> doUnzip(file)).show();
+    }
+
+    private void showArchives() {
+        List<File> archives = FileUtils.search(
+                Environment.getExternalStorageDirectory(), ".zip", 100);
+        List<String> labels = new ArrayList<>();
+        final List<File> targets = new ArrayList<>();
+        for (File file : archives) {
+            if (file.isFile() && file.getName().toLowerCase().endsWith(".zip")) {
+                labels.add(file.getName() + " · " + FileUtils.human(file.length()));
+                targets.add(file);
+            }
+        }
+        labels.add("＋ Архивировать текущую папку");
+        new AlertDialog.Builder(this).setTitle("Архивы")
+                .setItems(labels.toArray(new String[0]), (dialog, which) -> {
+                    if (which < targets.size()) unzip(targets.get(which));
+                    else zipFiles(Arrays.asList(current));
+                }).show();
     }
 
     private void doUnzip(File file) {

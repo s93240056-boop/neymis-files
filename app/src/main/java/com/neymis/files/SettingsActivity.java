@@ -70,7 +70,7 @@ public class SettingsActivity extends AppCompatActivity {
         row(root, "Папка приложения", getFilesDir().getAbsolutePath(), v -> toast(getFilesDir().getAbsolutePath()));
 
         category(root, "О ПРИЛОЖЕНИИ");
-        row(root, "Версия", "1.9", null);
+        row(root, "Версия", "2.0", null);
         row(root, "Лицензия", "MIT", v -> toast("Лицензия MIT — исходный код открыт"));
         row(root, "Исходный код", "GitHub", v -> startActivity(new Intent(Intent.ACTION_VIEW,
                 Uri.parse("https://github.com/s93240056-boop/neymis-files"))));
