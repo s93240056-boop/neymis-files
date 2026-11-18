@@ -70,7 +70,7 @@ public class SettingsActivity extends AppCompatActivity {
         row(root, "Папка приложения", getFilesDir().getAbsolutePath(), v -> toast(getFilesDir().getAbsolutePath()));
 
         category(root, "О ПРИЛОЖЕНИИ");
-        row(root, "Версия", "1.7", null);
+        row(root, "Версия", "1.8", null);
         row(root, "Лицензия", "MIT", v -> toast("Лицензия MIT — исходный код открыт"));
         row(root, "Исходный код", "GitHub", v -> startActivity(new Intent(Intent.ACTION_VIEW,
                 Uri.parse("https://github.com/s93240056-boop/neymis-files"))));
@@ -206,8 +206,8 @@ public class SettingsActivity extends AppCompatActivity {
 
     private String sortName() {
         String[] by = {"имени", "размеру", "дате"};
-        int sort = prefs.getInt("sort", 0);
-        boolean asc = prefs.getBoolean("asc", true);
+        int sort = prefs.getInt("sort", 2);
+        boolean asc = prefs.getBoolean("asc", false);
         return "По " + by[Math.max(0, Math.min(2, sort))] + (asc ? " ↑" : " ↓");
     }
 

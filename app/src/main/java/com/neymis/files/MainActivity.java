@@ -97,8 +97,12 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        sortBy = prefs.getInt(KEY_SORT, 0);
-        sortAsc = prefs.getBoolean(KEY_ASC, true);
+        if (!prefs.getBoolean("sort_newest_first_v18", false)) {
+            prefs.edit().putInt(KEY_SORT, 2).putBoolean(KEY_ASC, false)
+                    .putBoolean("sort_newest_first_v18", true).apply();
+        }
+        sortBy = prefs.getInt(KEY_SORT, 2);
+        sortAsc = prefs.getBoolean(KEY_ASC, false);
         showHidden = prefs.getBoolean(KEY_HIDDEN, false);
 
         homeView = findViewById(R.id.homeView);
@@ -534,7 +538,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void about() {
         new AlertDialog.Builder(this).setTitle("Neymis Files")
-                .setMessage("Файловый менеджер с открытым кодом.\nВерсия 1.7\nЛицензия MIT\n"
+                .setMessage("Файловый менеджер с открытым кодом.\nВерсия 1.8\nЛицензия MIT\n"
                         + "Исходники: github.com/s93240056-boop/neymis-files")
                 .setPositiveButton("OK", null).show();
     }

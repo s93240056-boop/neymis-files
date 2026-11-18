@@ -72,20 +72,26 @@ final class FileListAdapter extends BaseAdapter {
     }
 
     private static int[] resolveColors(Context context) {
-        android.util.TypedValue value = new android.util.TypedValue();
-        int text = Color.WHITE, sub = Color.LTGRAY;
-        if (context.getTheme().resolveAttribute(android.R.attr.textColorPrimary, value, true)) {
-            text = value.data;
-        }
-        if (context.getTheme().resolveAttribute(android.R.attr.textColorSecondary, value, true)) {
-            sub = value.data;
-        }
-        int accent = Color.parseColor("#B39DDB");
-        if (context.getTheme().resolveAttribute(
-                androidx.appcompat.R.attr.colorAccent, value, true)) {
-            accent = value.data;
-        }
+        int text = Color.WHITE, sub = Color.LTGRAY, accent = Color.parseColor("#B39DDB");
+        text = resolve(context, android.R.attr.textColorPrimary, text);
+        sub = resolve(context, android.R.attr.textColorSecondary, sub);
+        accent = resolve(context, androidx.appcompat.R.attr.colorAccent, accent);
         return new int[]{text, sub, accent};
+    }
+
+    private static int resolve(Context context, int attr, int fallback) {
+        android.util.TypedValue value = new android.util.TypedValue();
+        if (!context.getTheme().resolveAttribute(attr, value, true)) return fallback;
+        if (value.type >= android.util.TypedValue.TYPE_FIRST_COLOR_INT
+                && value.type <= android.util.TypedValue.TYPE_LAST_COLOR_INT) return value.data;
+        if (value.type == android.util.TypedValue.TYPE_REFERENCE) {
+            try {
+                return androidx.core.content.ContextCompat.getColor(context, value.resourceId);
+            } catch (Exception ignored) {
+                return fallback;
+            }
+        }
+        return fallback;
     }
 
     @Override
