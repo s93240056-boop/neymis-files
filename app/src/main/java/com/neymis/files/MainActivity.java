@@ -23,6 +23,7 @@ import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.EditText;
 import android.widget.FrameLayout;
+import android.widget.GridView;
 import android.widget.HorizontalScrollView;
 import android.widget.ImageButton;
 import android.widget.ImageView;
@@ -48,6 +49,9 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
+import java.util.Enumeration;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -73,6 +77,9 @@ public class MainActivity extends AppCompatActivity {
     private boolean sortAsc;
     private boolean showHidden;
     private ArrayAdapter<String> adapter;
+    private ArrayAdapter<String> gridAdapter;
+    private GridView gridView;
+    private Trash trash;
     private TextView pathView;
     private String lastTheme;
 
@@ -93,9 +100,16 @@ public class MainActivity extends AppCompatActivity {
         homeContainer = findViewById(R.id.homeContainer);
         pathView = findViewById(R.id.path);
 
+        trash = new Trash(prefs);
+        trash.purgeOld();
+
         ListView listView = findViewById(R.id.list);
         adapter = new ArrayAdapter<>(this, android.R.layout.simple_list_item_1, names);
         listView.setAdapter(adapter);
+
+        gridView = findViewById(R.id.grid);
+        gridAdapter = new ArrayAdapter<>(this, android.R.layout.simple_list_item_1, names);
+        gridView.setAdapter(gridAdapter);
 
         current = Environment.getExternalStorageDirectory();
         show(current);
@@ -116,6 +130,23 @@ public class MainActivity extends AppCompatActivity {
         });
         registerForContextMenu(listView);
 
+        gridView.setOnItemClickListener((parent, view, position, id) -> {
+            if (selectionMode && position > 0) {
+                toggleSelected(files.get(position - 1));
+                return;
+            }
+            if (position == 0) {
+                File parentFile = current.getParentFile();
+                if (parentFile != null) show(parentFile);
+                return;
+            }
+            File file = files.get(position - 1);
+            if (file.isDirectory()) show(file);
+            else open(file);
+        });
+        registerForContextMenu(gridView);
+        applyGrid();
+
         findViewById(R.id.homeButton).setOnClickListener(v -> showHome());
         ImageButton refresh = findViewById(R.id.fabRefresh);
         ImageButton open = findViewById(R.id.fabOpen);
@@ -135,6 +166,7 @@ public class MainActivity extends AppCompatActivity {
         }
         if (theme == 1) setTheme(R.style.AppTheme_Light);
         else if (theme == 2) setTheme(R.style.AppTheme_Dark);
+        else if (theme == 3) setTheme(R.style.AppTheme_System);
         else setTheme(R.style.AppTheme_Gradient);
     }
 
@@ -367,8 +399,8 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private View collectionGrid() {
-        String[] names = {"Избранное", "Секретная папка"};
-        int[] icons = {R.drawable.ic_star, R.drawable.ic_lock};
+        String[] names = {"Избранное", "Безопасная папка", "Очистка памяти", "Корзина"};
+        int[] icons = {R.drawable.ic_star, R.drawable.ic_lock, R.drawable.ic_refresh, R.drawable.ic_doc};
         return twoColumnGrid(names, icons, new int[]{}, null, names);
     }
 
@@ -439,13 +471,15 @@ public class MainActivity extends AppCompatActivity {
             if (index == 0) {
                 detail.setText("Быстрый доступ");
                 card.setOnClickListener(v -> favorites());
+            } else if (index == 1) {
+                detail.setText("PIN и биометрия");
+                card.setOnClickListener(v -> startActivity(new Intent(this, SafeActivity.class)));
+            } else if (index == 2) {
+                detail.setText("Кэш, дубликаты, мусор");
+                card.setOnClickListener(v -> startActivity(new Intent(this, CleanerActivity.class)));
             } else {
-                detail.setText("Скрытая папка");
-                card.setOnClickListener(v -> {
-                    File secret = new File(Environment.getExternalStorageDirectory(), ".NeymisSecret");
-                    secret.mkdirs();
-                    showBrowser(secret);
-                });
+                detail.setText("30 дней на восстановление");
+                card.setOnClickListener(v -> startActivity(new Intent(this, TrashActivity.class)));
             }
         } else {
             if (index == 0) {
@@ -542,6 +576,20 @@ public class MainActivity extends AppCompatActivity {
             names.add(mark + (file.isDirectory() ? "[DIR] " : "") + file.getName() + size);
         }
         adapter.notifyDataSetChanged();
+        if (gridAdapter != null) gridAdapter.notifyDataSetChanged();
+    }
+
+    private void applyGrid() {
+        boolean grid = prefs.getBoolean("grid", false);
+        gridView.setVisibility(grid ? View.VISIBLE : View.GONE);
+        findViewById(R.id.list).setVisibility(grid ? View.GONE : View.VISIBLE);
+    }
+
+    private void toggleGrid() {
+        boolean grid = !prefs.getBoolean("grid", false);
+        prefs.edit().putBoolean("grid", grid).apply();
+        applyGrid();
+        toast(grid ? "Вид: сетка" : "Вид: список");
     }
 
     private void toggleSelected(File file) {
@@ -624,7 +672,8 @@ public class MainActivity extends AppCompatActivity {
         menu.add(0, 6, 5, "Удалить");
         menu.add(0, 7, 6, "Архивировать в ZIP");
         menu.add(0, 8, 7, "Свойства");
-        if (selectedFile.isFile() && isText(selectedFile.getName())) menu.add(0, 9, 8, "Редактировать");
+        menu.add(0, 12, 8, "В избранное");
+        if (selectedFile.isFile() && isText(selectedFile.getName())) menu.add(0, 9, 9, "Редактировать");
         if (selectedFile.getName().toLowerCase().endsWith(".zip")) menu.add(0, 10, 9, "Распаковать");
         if (selectedFile.getName().toLowerCase().endsWith(".apk")) menu.add(0, 11, 10, "Установить APK");
     }
@@ -642,6 +691,7 @@ public class MainActivity extends AppCompatActivity {
             case 6: delete(file); return true;
             case 7: zipFiles(Arrays.asList(file)); return true;
             case 8: properties(file); return true;
+            case 12: addFavorite(file); return true;
             case 9: editText(file); return true;
             case 10: unzip(file); return true;
             case 11: open(file); return true;
@@ -664,6 +714,8 @@ public class MainActivity extends AppCompatActivity {
         menu.add(0, 20, 10, "Выбрать несколько");
         menu.add(0, 21, 11, "Настройки");
         menu.add(0, 22, 12, "Вставить");
+        menu.add(0, 23, 13, "Расширенный поиск");
+        menu.add(0, 24, 14, "Вид: список/сетка");
         menu.add(1, 30, 12, "Копировать");
         menu.add(1, 31, 13, "Вырезать");
         menu.add(1, 32, 14, "Удалить");
@@ -676,7 +728,7 @@ public class MainActivity extends AppCompatActivity {
     @Override
     public boolean onPrepareOptionsMenu(Menu menu) {
         boolean browsing = browserView.getVisibility() == View.VISIBLE;
-        for (int i = 10; i <= 22; i++) {
+        for (int i = 10; i <= 24; i++) {
             MenuItem item = menu.findItem(i);
             if (item != null) {
                 boolean visible = !(i == 22 && clipboard.isEmpty());
@@ -706,6 +758,8 @@ public class MainActivity extends AppCompatActivity {
             case 20: setSelectionMode(true); return true;
             case 21: startActivity(new Intent(this, SettingsActivity.class)); return true;
             case 22: paste(); return true;
+            case 23: advancedSearch(); return true;
+            case 24: toggleGrid(); return true;
             case 30: copySelection(false); return true;
             case 31: copySelection(true); return true;
             case 32: deleteSelection(); return true;
@@ -768,18 +822,18 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void delete(File file) {
-        confirm("Удалить " + file.getName() + "?", () -> {
-            if (FileUtils.delete(file)) { show(current); toast("Удалено"); }
-            else toast("Не удалось удалить");
+        confirm("Переместить " + file.getName() + " в корзину?", () -> {
+            trash.put(file);
+            show(current);
+            toast("Перемещено в корзину");
         });
     }
 
     private void deleteSelection() {
         if (selected.isEmpty()) return;
-        confirm("Удалить выбранные (" + selected.size() + ")?", () -> {
-            int ok = 0;
-            for (File file : selected) if (FileUtils.delete(file)) ok++;
-            toast("Удалено: " + ok);
+        confirm("Переместить выбранные (" + selected.size() + ") в корзину?", () -> {
+            for (File file : selected) trash.put(file);
+            toast("Перемещено в корзину: " + selected.size());
             setSelectionMode(false);
             show(current);
         });
@@ -850,6 +904,26 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void unzip(File file) {
+        List<String> contents = new ArrayList<>();
+        try (ZipFile zip = new ZipFile(file)) {
+            Enumeration<? extends ZipEntry> entries = zip.entries();
+            while (entries.hasMoreElements() && contents.size() < 200) {
+                contents.add(entries.nextElement().getName());
+            }
+        } catch (IOException e) {
+            toast("Не удалось прочитать архив");
+            return;
+        }
+        String preview = contents.isEmpty() ? "Архив пуст" :
+                String.join("\n", contents.subList(0, Math.min(contents.size(), 30)))
+                        + (contents.size() > 30 ? "\n… и ещё " + (contents.size() - 30) : "");
+        new AlertDialog.Builder(this).setTitle("Содержимое архива")
+                .setMessage(preview)
+                .setNegativeButton("Отмена", null)
+                .setPositiveButton("Распаковать", (dialog, which) -> doUnzip(file)).show();
+    }
+
+    private void doUnzip(File file) {
         File dest = FileUtils.uniqueDestination(file.getParentFile(),
                 file.getName().replaceAll("\\.zip$", ""));
         try {
@@ -945,6 +1019,48 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
+    private void advancedSearch() {
+        String[] types = {"Все", "Изображения", "Видео", "Аудио", "Документы", "APK"};
+        new AlertDialog.Builder(this).setTitle("Тип файла").setItems(types, (dialog, typeIndex) -> {
+            prompt("Название (пусто = все)", "", query -> {
+                String[] sizes = {"Любой размер", "Больше 1 МБ", "Больше 10 МБ", "Больше 100 МБ"};
+                new AlertDialog.Builder(this).setTitle("Размер файла").setItems(sizes, (d2, sizeIndex) -> {
+                    long minSize = sizeIndex == 1 ? 1024L * 1024
+                            : sizeIndex == 2 ? 10L * 1024 * 1024
+                            : sizeIndex == 3 ? 100L * 1024 * 1024 : 0;
+                    String needle = query.toLowerCase();
+                    List<File> found = FileUtils.search(
+                            Environment.getExternalStorageDirectory(),
+                            needle.isEmpty() ? "" : needle, 1000);
+                    List<File> result = new ArrayList<>();
+                    for (File file : found) {
+                        if (!file.isFile() || file.length() < minSize) continue;
+                        String name = file.getName().toLowerCase();
+                        boolean match = typeIndex == 0
+                                || (typeIndex == 1 && isImage(name))
+                                || (typeIndex == 2 && isVideo(name))
+                                || (typeIndex == 3 && isAudio(name))
+                                || (typeIndex == 4 && (isText(name) || name.endsWith(".pdf")))
+                                || (typeIndex == 5 && name.endsWith(".apk"));
+                        if (match) result.add(file);
+                    }
+                    files.clear();
+                    files.addAll(result);
+                    names.clear();
+                    names.add("..");
+                    for (File file : files) {
+                        names.add((file.isDirectory() ? "[DIR] " : "") + file.getName()
+                                + "  ·  " + FileUtils.human(file.length()));
+                    }
+                    adapter.notifyDataSetChanged();
+                    if (gridAdapter != null) gridAdapter.notifyDataSetChanged();
+                    showBrowser(current);
+                    pathView.setText("Результаты: " + result.size());
+                }).show();
+            });
+        }).show();
+    }
+
     private void chooseSort() {
         String[] variants = {"Имя ↑", "Имя ↓", "Размер ↑", "Размер ↓", "Дата ↑", "Дата ↓"};
         new AlertDialog.Builder(this).setTitle("Сортировка").setItems(variants, (dialog, which) -> {
@@ -962,18 +1078,38 @@ public class MainActivity extends AppCompatActivity {
         show(current);
     }
 
+    private List<String> favoritePaths() {
+        List<String> result = new ArrayList<>();
+        String raw = prefs.getString("favorites", "");
+        for (String line : raw.split("\n")) if (!line.isEmpty()) result.add(line);
+        return result;
+    }
+
+    private void addFavorite(File file) {
+        List<String> paths = favoritePaths();
+        if (!paths.contains(file.getAbsolutePath())) paths.add(file.getAbsolutePath());
+        StringBuilder builder = new StringBuilder();
+        for (String path : paths) builder.append(path).append('\n');
+        prefs.edit().putString("favorites", builder.toString()).apply();
+        toast("Добавлено в избранное");
+    }
+
     private void favorites() {
+        final List<String> paths = favoritePaths();
         File root = Environment.getExternalStorageDirectory();
-        final File[] places = {root, new File(root, "Download"), new File(root, "DCIM"),
-                new File(root, "Pictures"), new File(root, "Documents"),
-                new File(root, "Music"), new File(root, "Movies"), getExternalFilesDir(null)};
-        String[] labels = new String[places.length];
-        for (int i = 0; i < places.length; i++) {
-            labels[i] = places[i] == null ? "—" : places[i].getAbsolutePath();
+        if (paths.isEmpty()) {
+            paths.add(root.getAbsolutePath());
+            paths.add(new File(root, "Download").getAbsolutePath());
+            paths.add(new File(root, "DCIM").getAbsolutePath());
         }
-        new AlertDialog.Builder(this).setTitle("Избранное").setItems(labels, (dialog, which) -> {
-            if (places[which] != null) showBrowser(places[which]);
-        }).show();
+        String[] labels = paths.toArray(new String[0]);
+        new AlertDialog.Builder(this).setTitle("Избранное")
+                .setItems(labels, (dialog, which) -> showBrowser(new File(paths.get(which))))
+                .setNeutralButton("Добавить текущую", (dialog, which) -> addFavorite(current))
+                .setNegativeButton("Очистить", (dialog, which) -> {
+                    prefs.edit().putString("favorites", "").apply();
+                    toast("Список очищен");
+                }).show();
     }
 
     private void storageInfo() {
@@ -1025,7 +1161,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void chooseTheme() {
-        String[] variants = {"Фиолетово-синий градиент", "Белая", "Тёмная"};
+        String[] variants = {"Фиолетово-синий градиент", "Белая", "Тёмная", "Системная (Material You)"};
         new AlertDialog.Builder(this).setTitle("Тема приложения").setItems(variants, (dialog, which) -> {
             prefs.edit().putString(KEY_THEME, String.valueOf(which)).apply();
             recreate();

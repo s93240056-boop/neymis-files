@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="AppTheme.System" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <item name="colorPrimary">@android:color/system_accent1_500</item>
+        <item name="colorPrimaryDark">@android:color/system_accent1_700</item>
+        <item name="colorAccent">@android:color/system_accent1_500</item>
+        <item name="android:windowBackground">@android:color/system_background_50</item>
+    </style>
+</resources>

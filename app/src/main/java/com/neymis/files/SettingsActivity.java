@@ -84,6 +84,7 @@ public class SettingsActivity extends AppCompatActivity {
         }
         if (theme == 1) setTheme(R.style.AppTheme_Light);
         else if (theme == 2) setTheme(R.style.AppTheme_Dark);
+        else if (theme == 3) setTheme(R.style.AppTheme_System);
         else setTheme(R.style.AppTheme_Gradient);
     }
 
@@ -197,6 +198,7 @@ public class SettingsActivity extends AppCompatActivity {
             int theme = Integer.parseInt(prefs.getString("theme", "0"));
             if (theme == 1) return "Белая";
             if (theme == 2) return "Тёмная";
+            if (theme == 3) return "Системная (Material You)";
         } catch (Exception ignored) {
         }
         return "Фиолетово-синий градиент";
@@ -210,7 +212,7 @@ public class SettingsActivity extends AppCompatActivity {
     }
 
     private void chooseTheme() {
-        String[] variants = {"Фиолетово-синий градиент", "Белая", "Тёмная"};
+        String[] variants = {"Фиолетово-синий градиент", "Белая", "Тёмная", "Системная (Material You)"};
         new AlertDialog.Builder(this).setTitle("Тема").setItems(variants, (dialog, which) -> {
             prefs.edit().putString("theme", String.valueOf(which)).apply();
             recreate();

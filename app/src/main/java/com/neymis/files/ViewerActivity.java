@@ -69,6 +69,7 @@ public class ViewerActivity extends AppCompatActivity {
         }
         if (theme == 1) setTheme(R.style.AppTheme_Light);
         else if (theme == 2) setTheme(R.style.AppTheme_Dark);
+        else if (theme == 3) setTheme(R.style.AppTheme_System);
         else setTheme(R.style.AppTheme_Gradient);
 
         super.onCreate(savedInstanceState);
