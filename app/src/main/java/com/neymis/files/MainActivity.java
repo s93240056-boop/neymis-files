@@ -87,6 +87,7 @@ public class MainActivity extends AppCompatActivity {
     private ListView listView;
     private Trash trash;
     private TextView pathView;
+    private TextView selectionButton;
     private String lastTheme;
 
     @Override
@@ -114,9 +115,14 @@ public class MainActivity extends AppCompatActivity {
         trash.purgeOld();
 
         listView = findViewById(R.id.list);
-        listAdapter = new FileListAdapter(this, rows, selected,
-                this::showFileActions, this::selectAll);
+        rebuildListAdapter();
         listView.setAdapter(listAdapter);
+
+        selectionButton = findViewById(R.id.selectionButton);
+        selectionButton.setOnClickListener(v -> {
+            if (selectionMode) showSelectionActions();
+            else setSelectionMode(true);
+        });
 
         tabsBox = findViewById(R.id.tabs);
         fastScroll = findViewById(R.id.fastScroll);
@@ -198,6 +204,10 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     public void onBackPressed() {
+        if (selectionMode) {
+            setSelectionMode(false);
+            return;
+        }
         if (browserView.getVisibility() == View.VISIBLE) showHome();
         else super.onBackPressed();
     }
@@ -538,7 +548,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void about() {
         new AlertDialog.Builder(this).setTitle("Neymis Files")
-                .setMessage("Файловый менеджер с открытым кодом.\nВерсия 1.8\nЛицензия MIT\n"
+                .setMessage("Файловый менеджер с открытым кодом.\nВерсия 1.9\nЛицензия MIT\n"
                         + "Исходники: github.com/s93240056-boop/neymis-files")
                 .setPositiveButton("OK", null).show();
     }
@@ -605,6 +615,15 @@ public class MainActivity extends AppCompatActivity {
         }
         notifyLists();
         buildTabs();
+    }
+
+    private void rebuildListAdapter() {
+        listAdapter = new FileListAdapter(this, rows, selected,
+                this::showFileActions, () -> {
+                    if (selectionMode) setSelectionMode(false);
+                    else selectAll();
+                }, selectionMode);
+        if (listView != null) listView.setAdapter(listAdapter);
     }
 
     private void notifyLists() {
@@ -855,6 +874,23 @@ public class MainActivity extends AppCompatActivity {
                         (dialog, which) -> handleAction(ids.get(which), file)).show();
     }
 
+    private void showSelectionActions() {
+        String[] actions = {"Копировать", "Вырезать", "Удалить в корзину",
+                "Архивировать в ZIP", "Поделиться", "Выделить все", "Отменить выбор"};
+        new AlertDialog.Builder(this).setTitle("Выбрано: " + selected.size())
+                .setItems(actions, (dialog, which) -> {
+                    switch (which) {
+                        case 0: copySelection(false); break;
+                        case 1: copySelection(true); break;
+                        case 2: deleteSelection(); break;
+                        case 3: zipFiles(new ArrayList<>(selected)); break;
+                        case 4: shareSelection(); break;
+                        case 5: selectAll(); break;
+                        case 6: setSelectionMode(false); break;
+                    }
+                }).show();
+    }
+
     private void selectAll() {
         if (!selectionMode) setSelectionMode(true);
         selected.clear();
@@ -866,9 +902,14 @@ public class MainActivity extends AppCompatActivity {
     private void setSelectionMode(boolean on) {
         selectionMode = on;
         selected.clear();
+        rebuildListAdapter();
         refreshNames();
         invalidateOptionsMenu();
-        if (on) toast("Выбери файлы, затем действие в меню");
+        if (selectionButton != null) {
+            selectionButton.setVisibility(on ? View.VISIBLE : View.GONE);
+            selectionButton.setText(on ? "Отменить выбор" : "Выбрать");
+        }
+        if (on) toast("Выбери файлы, затем нажми «Готово» вверху");
     }
 
     private interface TextAction {

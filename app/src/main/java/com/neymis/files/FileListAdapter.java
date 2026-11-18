@@ -54,17 +54,20 @@ final class FileListAdapter extends BaseAdapter {
     private final Set<File> selected;
     private final MenuListener menuListener;
     private final CheckListener checkListener;
+    private final boolean selectionMode;
     private final int textColor;
     private final int subColor;
     private final int accentColor;
 
     FileListAdapter(Context context, List<Row> rows, Set<File> selected,
-                    MenuListener menuListener, CheckListener checkListener) {
+                    MenuListener menuListener, CheckListener checkListener,
+                    boolean selectionMode) {
         this.context = context;
         this.rows = rows;
         this.selected = selected;
         this.menuListener = menuListener;
         this.checkListener = checkListener;
+        this.selectionMode = selectionMode;
         int[] colors = resolveColors(context);
         this.textColor = colors[0];
         this.subColor = colors[1];
@@ -130,9 +133,10 @@ final class FileListAdapter extends BaseAdapter {
         box.addView(text);
 
         TextView check = new TextView(context);
-        check.setText("☑");
-        check.setTextSize(TypedValue.COMPLEX_UNIT_SP, 20);
-        check.setTextColor(subColor);
+        check.setText(selectionMode ? "Отменить" : "☑");
+        check.setTextSize(selectionMode ? TypedValue.COMPLEX_UNIT_SP
+                : TypedValue.COMPLEX_UNIT_SP, selectionMode ? 13 : 20);
+        check.setTextColor(accentColor);
         check.setOnClickListener(v -> checkListener.onCheck());
         box.addView(check);
         return box;
@@ -145,6 +149,8 @@ final class FileListAdapter extends BaseAdapter {
         box.setPadding(dp(16), dp(8), dp(8), dp(8));
         if (selected.contains(file)) {
             box.setBackgroundColor(Color.parseColor("#22B39DDB"));
+        } else {
+            box.setBackgroundColor(Color.TRANSPARENT);
         }
 
         ImageView icon = new ImageView(context);
