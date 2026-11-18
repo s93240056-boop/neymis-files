@@ -176,7 +176,8 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private int accentColor() {
-        return resolveColor(R.attr.colorAccent, Color.parseColor("#B39DDB"));
+        return resolveColor(androidx.appcompat.R.attr.colorAccent,
+                Color.parseColor("#B39DDB"));
     }
 
     private GradientDrawable cardBackground() {
