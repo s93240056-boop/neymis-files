@@ -94,7 +94,7 @@ final class FileListAdapter extends BaseAdapter {
     }
 
     @Override
-    public Object getItem(int position) {
+    public Row getItem(int position) {
         return rows.get(position);
     }
 
