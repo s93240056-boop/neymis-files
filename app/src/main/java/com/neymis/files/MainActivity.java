@@ -74,10 +74,12 @@ public class MainActivity extends AppCompatActivity {
     private boolean showHidden;
     private ArrayAdapter<String> adapter;
     private TextView pathView;
+    private String lastTheme;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
+        lastTheme = prefs.getString(KEY_THEME, "0");
         applyTheme();
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
@@ -134,6 +136,13 @@ public class MainActivity extends AppCompatActivity {
         if (theme == 1) setTheme(R.style.AppTheme_Light);
         else if (theme == 2) setTheme(R.style.AppTheme_Dark);
         else setTheme(R.style.AppTheme_Gradient);
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        String currentTheme = prefs.getString(KEY_THEME, "0");
+        if (!currentTheme.equals(lastTheme)) recreate();
     }
 
     @Override
@@ -250,6 +259,13 @@ public class MainActivity extends AppCompatActivity {
                 ViewGroup.LayoutParams.WRAP_CONTENT, 1));
         query.setOnClickListener(v -> search(true));
         bar.addView(query);
+
+        ImageView settings = new ImageView(this);
+        settings.setImageResource(R.drawable.ic_settings);
+        settings.setColorFilter(subColor());
+        settings.setPadding(dp(8), 0, dp(8), 0);
+        settings.setOnClickListener(v -> startActivity(new Intent(this, SettingsActivity.class)));
+        bar.addView(settings);
 
         ImageView search = new ImageView(this);
         search.setImageResource(R.drawable.ic_search);
@@ -451,7 +467,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void showMainMenu() {
         String[] items = {"Создать папку", "Создать файл", "Сортировка", "Скрытые файлы",
-                "Избранное", "Память", "Приложения", "Тема", "О программе"};
+                "Избранное", "Память", "Приложения", "Настройки", "О программе"};
         new AlertDialog.Builder(this).setTitle("Меню").setItems(items, (dialog, which) -> {
             switch (which) {
                 case 0: createFolder(); break;
@@ -461,7 +477,7 @@ public class MainActivity extends AppCompatActivity {
                 case 4: favorites(); break;
                 case 5: storageInfo(); break;
                 case 6: appManager(); break;
-                case 7: chooseTheme(); break;
+                case 7: startActivity(new Intent(this, SettingsActivity.class)); break;
                 case 8: about(); break;
             }
         }).show();
@@ -521,7 +537,9 @@ public class MainActivity extends AppCompatActivity {
         names.add("..");
         for (File file : files) {
             String mark = selected.contains(file) ? "✓ " : "";
-            names.add(mark + (file.isDirectory() ? "[DIR] " : "") + file.getName());
+            String size = prefs.getBoolean("show_size", true)
+                    ? "  ·  " + FileUtils.human(FileUtils.size(file)) : "";
+            names.add(mark + (file.isDirectory() ? "[DIR] " : "") + file.getName() + size);
         }
         adapter.notifyDataSetChanged();
     }
@@ -533,6 +551,14 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void open(File file) {
+        String viewerType = viewerType(file.getName());
+        if (viewerType != null && prefs.getBoolean("internal_viewer", true)) {
+            Intent intent = new Intent(this, ViewerActivity.class);
+            intent.putExtra("path", file.getAbsolutePath());
+            intent.putExtra("type", viewerType);
+            startActivity(intent);
+            return;
+        }
         Uri uri = FileProvider.getUriForFile(this, getPackageName() + ".fileprovider", file);
         Intent intent = new Intent(Intent.ACTION_VIEW);
         intent.setDataAndType(uri, mime(file.getName()));
@@ -542,6 +568,17 @@ public class MainActivity extends AppCompatActivity {
         } catch (Exception e) {
             toast("Нет приложения для этого файла");
         }
+    }
+
+    private static String viewerType(String name) {
+        String lower = name.toLowerCase();
+        if (isText(name) || lower.endsWith(".pdf")) {
+            return lower.endsWith(".pdf") ? "pdf" : "text";
+        }
+        if (isImage(name)) return "image";
+        if (isVideo(name)) return "video";
+        if (isAudio(name)) return "audio";
+        return null;
     }
 
     private static boolean isImage(String name) {
@@ -625,7 +662,8 @@ public class MainActivity extends AppCompatActivity {
         menu.add(0, 18, 8, "Приложения");
         menu.add(0, 19, 9, "Тема");
         menu.add(0, 20, 10, "Выбрать несколько");
-        menu.add(0, 22, 11, "Вставить");
+        menu.add(0, 21, 11, "Настройки");
+        menu.add(0, 22, 12, "Вставить");
         menu.add(1, 30, 12, "Копировать");
         menu.add(1, 31, 13, "Вырезать");
         menu.add(1, 32, 14, "Удалить");
@@ -666,6 +704,7 @@ public class MainActivity extends AppCompatActivity {
             case 18: appManager(); return true;
             case 19: chooseTheme(); return true;
             case 20: setSelectionMode(true); return true;
+            case 21: startActivity(new Intent(this, SettingsActivity.class)); return true;
             case 22: paste(); return true;
             case 30: copySelection(false); return true;
             case 31: copySelection(true); return true;

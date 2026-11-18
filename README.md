@@ -21,12 +21,22 @@ A full-featured file manager for Android. Open source, no ads, no analytics.
 - Storage usage info
 - App manager: list installed apps, save their APK, launch them
 
-**Themes**
-- Purple-blue gradient (default)
-- Light
-- Dark
+**Built-in viewer** (can be disabled in Settings)
+- Text files with a built-in editor
+- Images with pinch-to-zoom and pan
+- Audio with play/pause and seek
+- Video with playback controls
+- PDF with page navigation
 
-Switch the theme in the menu → **Тема**. The choice is remembered.
+**Settings screen** (gear icon in the search bar)
+- Theme: purple-blue gradient (default), light, dark
+- Sorting order
+- Show file sizes in the list
+- Show hidden files
+- Enable/disable the built-in viewer
+- Storage info, license and source link
+
+All choices are remembered between launches.
 
 ## Build
 
