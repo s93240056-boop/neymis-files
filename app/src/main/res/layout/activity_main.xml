@@ -1,22 +1,89 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:orientation="vertical">
+    android:layout_height="match_parent">
 
-    <TextView
-        android:id="@+id/path"
+    <ScrollView
+        android:id="@+id/homeView"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:ellipsize="middle"
-        android:maxLines="1"
-        android:padding="12dp"
-        android:textSize="13sp" />
+        android:layout_height="match_parent"
+        android:fillViewport="true">
 
-    <ListView
-        android:id="@+id/list"
+        <FrameLayout
+            android:id="@+id/homeContainer"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" />
+    </ScrollView>
+
+    <LinearLayout
+        android:id="@+id/browserView"
         android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1" />
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:visibility="gone">
 
-</LinearLayout>
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:padding="12dp">
+
+            <TextView
+                android:id="@+id/homeButton"
+                android:layout_width="40dp"
+                android:layout_height="wrap_content"
+                android:clickable="true"
+                android:text="‹"
+                android:textSize="28sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/path"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:ellipsize="middle"
+                android:maxLines="1"
+                android:textSize="13sp" />
+        </LinearLayout>
+
+        <ListView
+            android:id="@+id/list"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/fab"
+        android:layout_width="160dp"
+        android:layout_height="56dp"
+        android:layout_gravity="bottom|center_horizontal"
+        android:layout_marginBottom="24dp"
+        android:background="@drawable/fab_bg"
+        android:gravity="center"
+        android:orientation="horizontal">
+
+        <ImageButton
+            android:id="@+id/fabRefresh"
+            android:layout_width="64dp"
+            android:layout_height="match_parent"
+            android:background="?android:attr/selectableItemBackground"
+            android:contentDescription="Обновить"
+            android:src="@drawable/ic_refresh" />
+
+        <View
+            android:layout_width="1dp"
+            android:layout_height="28dp"
+            android:background="#66FFFFFF" />
+
+        <ImageButton
+            android:id="@+id/fabOpen"
+            android:layout_width="64dp"
+            android:layout_height="match_parent"
+            android:background="?android:attr/selectableItemBackground"
+            android:contentDescription="Открыть хранилище"
+            android:src="@drawable/ic_scan" />
+    </LinearLayout>
+
+</FrameLayout>

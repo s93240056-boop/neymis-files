@@ -3,6 +3,8 @@ package com.neymis.files;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.ApplicationInfo;
+import android.graphics.Color;
+import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -10,14 +12,23 @@ import android.os.Environment;
 import android.os.StatFs;
 import android.provider.Settings;
 import android.text.InputType;
+import android.util.TypedValue;
 import android.view.ContextMenu;
+import android.view.Gravity;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
+import android.view.ViewGroup;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.EditText;
+import android.widget.FrameLayout;
+import android.widget.HorizontalScrollView;
+import android.widget.ImageButton;
+import android.widget.ImageView;
+import android.widget.LinearLayout;
 import android.widget.ListView;
+import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -47,6 +58,9 @@ public class MainActivity extends AppCompatActivity {
     private static final String KEY_HIDDEN = "hidden";
 
     private SharedPreferences prefs;
+    private ScrollView homeView;
+    private LinearLayout browserView;
+    private ViewGroup homeContainer;
     private File current;
     private File selectedFile;
     private final List<File> files = new ArrayList<>();
@@ -72,7 +86,11 @@ public class MainActivity extends AppCompatActivity {
         sortAsc = prefs.getBoolean(KEY_ASC, true);
         showHidden = prefs.getBoolean(KEY_HIDDEN, false);
 
+        homeView = findViewById(R.id.homeView);
+        browserView = findViewById(R.id.browserView);
+        homeContainer = findViewById(R.id.homeContainer);
         pathView = findViewById(R.id.path);
+
         ListView listView = findViewById(R.id.list);
         adapter = new ArrayAdapter<>(this, android.R.layout.simple_list_item_1, names);
         listView.setAdapter(adapter);
@@ -94,8 +112,16 @@ public class MainActivity extends AppCompatActivity {
             if (file.isDirectory()) show(file);
             else open(file);
         });
-
         registerForContextMenu(listView);
+
+        findViewById(R.id.homeButton).setOnClickListener(v -> showHome());
+        ImageButton refresh = findViewById(R.id.fabRefresh);
+        ImageButton open = findViewById(R.id.fabOpen);
+        refresh.setOnClickListener(v -> { buildHome(); toast("Обновлено"); });
+        open.setOnClickListener(v -> showBrowser(current));
+
+        buildHome();
+        showHome();
         requestStorageAccess();
     }
 
@@ -109,6 +135,345 @@ public class MainActivity extends AppCompatActivity {
         else if (theme == 2) setTheme(R.style.AppTheme_Dark);
         else setTheme(R.style.AppTheme_Gradient);
     }
+
+    @Override
+    public void onBackPressed() {
+        if (browserView.getVisibility() == View.VISIBLE) showHome();
+        else super.onBackPressed();
+    }
+
+    private void showHome() {
+        browserView.setVisibility(View.GONE);
+        homeView.setVisibility(View.VISIBLE);
+    }
+
+    private void showBrowser(File dir) {
+        homeView.setVisibility(View.GONE);
+        browserView.setVisibility(View.VISIBLE);
+        show(dir);
+    }
+
+    // ---------- главный экран ------------------------------------------------
+
+    private int dp(int value) {
+        return Math.round(TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP,
+                value, getResources().getDisplayMetrics()));
+    }
+
+    private int resolveColor(int attr, int fallback) {
+        TypedValue value = new TypedValue();
+        getTheme().resolveAttribute(attr, value, true);
+        return value.type >= TypedValue.TYPE_FIRST_COLOR_INT
+                && value.type <= TypedValue.TYPE_LAST_COLOR_INT ? value.data : fallback;
+    }
+
+    private int textColor() {
+        return resolveColor(android.R.attr.textColorPrimary, Color.WHITE);
+    }
+
+    private int subColor() {
+        return resolveColor(android.R.attr.textColorSecondary, Color.LTGRAY);
+    }
+
+    private int accentColor() {
+        return resolveColor(R.attr.colorAccent, Color.parseColor("#B39DDB"));
+    }
+
+    private GradientDrawable cardBackground() {
+        int theme = 0;
+        try {
+            theme = Integer.parseInt(prefs.getString(KEY_THEME, "0"));
+        } catch (Exception ignored) {
+        }
+        int color = theme == 1 ? Color.parseColor("#F2F2F6")
+                : theme == 2 ? Color.parseColor("#1E1E24")
+                : Color.parseColor("#33FFFFFF");
+        GradientDrawable drawable = new GradientDrawable();
+        drawable.setColor(color);
+        drawable.setCornerRadius(dp(20));
+        return drawable;
+    }
+
+    private TextView label(CharSequence text, int size, int color) {
+        TextView view = new TextView(this);
+        view.setText(text);
+        view.setTextSize(TypedValue.COMPLEX_UNIT_SP, size);
+        view.setTextColor(color);
+        return view;
+    }
+
+    private void buildHome() {
+        homeContainer.removeAllViews();
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setPadding(dp(16), dp(16), dp(16), dp(96));
+        homeContainer.addView(root, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        root.addView(searchBar());
+
+        LinearLayout recentSection = sectionHeader("Недавние", "Показать все", v -> showRecentAll());
+        root.addView(recentSection);
+        root.addView(recentRow());
+
+        root.addView(sectionHeader("Категории", null, null));
+        root.addView(categoryGrid());
+
+        root.addView(sectionHeader("Подборки", null, null));
+        root.addView(collectionGrid());
+
+        root.addView(sectionHeader("Все хранилище", null, null));
+        root.addView(storageGrid());
+    }
+
+    private View searchBar() {
+        LinearLayout bar = new LinearLayout(this);
+        bar.setOrientation(LinearLayout.HORIZONTAL);
+        bar.setBackground(cardBackground());
+        bar.setGravity(Gravity.CENTER_VERTICAL);
+        bar.setPadding(dp(14), dp(14), dp(14), dp(14));
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        params.bottomMargin = dp(24);
+        bar.setLayoutParams(params);
+
+        ImageView menu = new ImageView(this);
+        menu.setImageResource(R.drawable.ic_menu);
+        menu.setColorFilter(textColor());
+        menu.setPadding(0, 0, dp(12), 0);
+        menu.setOnClickListener(v -> showMainMenu());
+        bar.addView(menu);
+
+        TextView query = label("Поиск по запросу...", 16, subColor());
+        query.setLayoutParams(new LinearLayout.LayoutParams(0,
+                ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+        query.setOnClickListener(v -> search(true));
+        bar.addView(query);
+
+        ImageView search = new ImageView(this);
+        search.setImageResource(R.drawable.ic_search);
+        search.setColorFilter(accentColor());
+        search.setOnClickListener(v -> search(true));
+        bar.addView(search);
+        return bar;
+    }
+
+    private LinearLayout sectionHeader(String title, String action, View.OnClickListener listener) {
+        LinearLayout header = new LinearLayout(this);
+        header.setOrientation(LinearLayout.HORIZONTAL);
+        header.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        params.topMargin = dp(16);
+        params.bottomMargin = dp(12);
+        header.setLayoutParams(params);
+
+        TextView name = label(title, 22, textColor());
+        name.setLayoutParams(new LinearLayout.LayoutParams(0,
+                ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+        header.addView(name);
+
+        if (action != null) {
+            TextView link = label(action, 14, accentColor());
+            link.setOnClickListener(listener);
+            header.addView(link);
+        }
+        return header;
+    }
+
+    private View recentRow() {
+        HorizontalScrollView scroll = new HorizontalScrollView(this);
+        scroll.setHorizontalScrollBarEnabled(false);
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        scroll.addView(row);
+
+        List<File> recent = new ArrayList<>();
+        File root = Environment.getExternalStorageDirectory();
+        for (String folder : new String[]{"Download", "DCIM", "Pictures", "Documents"}) {
+            File dir = new File(root, folder);
+            File[] children = dir.listFiles();
+            if (children != null) recent.addAll(Arrays.asList(children));
+        }
+        Collections.sort(recent, (a, b) -> Long.compare(b.lastModified(), a.lastModified()));
+        if (recent.isEmpty()) {
+            TextView empty = label("Нет недавних файлов", 14, subColor());
+            row.addView(empty);
+            return scroll;
+        }
+        int limit = Math.min(recent.size(), 8);
+        for (int i = 0; i < limit; i++) {
+            File file = recent.get(i);
+            LinearLayout card = new LinearLayout(this);
+            card.setOrientation(LinearLayout.VERTICAL);
+            card.setBackground(cardBackground());
+            card.setPadding(dp(14), dp(14), dp(14), dp(14));
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(dp(170), dp(120));
+            params.rightMargin = dp(10);
+            card.setLayoutParams(params);
+
+            ImageView icon = new ImageView(this);
+            icon.setImageResource(isImage(file.getName()) ? R.drawable.ic_image
+                    : isVideo(file.getName()) ? R.drawable.ic_video
+                    : isAudio(file.getName()) ? R.drawable.ic_audio : R.drawable.ic_doc);
+            icon.setColorFilter(accentColor());
+            card.addView(icon);
+
+            TextView title = label(file.getName(), 14, textColor());
+            title.setMaxLines(2);
+            title.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            LinearLayout.LayoutParams titleParams = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, 0, 1);
+            titleParams.topMargin = dp(8);
+            title.setLayoutParams(titleParams);
+            card.addView(title);
+
+            TextView detail = label(FileUtils.human(file.length()), 12, subColor());
+            card.addView(detail);
+
+            card.setOnClickListener(v -> open(file));
+            row.addView(card);
+        }
+        return scroll;
+    }
+
+    private View categoryGrid() {
+        File root = Environment.getExternalStorageDirectory();
+        List<File> places = Arrays.asList(
+                new File(root, "Download"), new File(root, "Pictures"),
+                new File(root, "Movies"), new File(root, "Music"),
+                new File(root, "Documents"), getExternalFilesDir(null));
+        int[] icons = {R.drawable.ic_download, R.drawable.ic_image, R.drawable.ic_video,
+                R.drawable.ic_audio, R.drawable.ic_doc, R.drawable.ic_apps};
+        String[] names = {"Загрузки", "Изображения", "Видео", "Аудио", "Документы", "Приложения"};
+        return twoColumnGrid(names, icons, new int[]{}, places, null);
+    }
+
+    private View collectionGrid() {
+        String[] names = {"Избранное", "Секретная папка"};
+        int[] icons = {R.drawable.ic_star, R.drawable.ic_lock};
+        return twoColumnGrid(names, icons, new int[]{}, null, names);
+    }
+
+    private View storageGrid() {
+        String[] names = {"Внутренняя память", "Все файлы"};
+        int[] icons = {R.drawable.ic_phone, R.drawable.ic_sd};
+        return twoColumnGrid(names, icons, new int[]{}, null, null);
+    }
+
+    private View twoColumnGrid(String[] titles, int[] icons, int[] unused,
+                               List<File> places, String[] collections) {
+        LinearLayout grid = new LinearLayout(this);
+        grid.setOrientation(LinearLayout.VERTICAL);
+        for (int i = 0; i < titles.length; i += 2) {
+            LinearLayout row = new LinearLayout(this);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            for (int j = 0; j < 2 && i + j < titles.length; j++) {
+                final int index = i + j;
+                View card = gridCard(icons[index], titles[index], places, collections, index);
+                LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                        0, dp(88), 1);
+                params.rightMargin = j == 0 ? dp(8) : 0;
+                params.leftMargin = j == 1 ? dp(8) : 0;
+                params.bottomMargin = dp(10);
+                card.setLayoutParams(params);
+                row.addView(card);
+            }
+            grid.addView(row);
+        }
+        return grid;
+    }
+
+    private View gridCard(int iconRes, String title, List<File> places,
+                          String[] collections, int index) {
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.HORIZONTAL);
+        card.setGravity(Gravity.CENTER_VERTICAL);
+        card.setBackground(cardBackground());
+        card.setPadding(dp(12), dp(12), dp(12), dp(12));
+
+        ImageView icon = new ImageView(this);
+        icon.setImageResource(iconRes);
+        icon.setColorFilter(accentColor());
+        card.addView(icon);
+
+        LinearLayout texts = new LinearLayout(this);
+        texts.setOrientation(LinearLayout.VERTICAL);
+        texts.setLayoutParams(new LinearLayout.LayoutParams(0,
+                ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+        TextView name = label(title, 14, textColor());
+        name.setMaxLines(1);
+        name.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        texts.addView(name);
+        TextView detail = label("…", 12, subColor());
+        texts.addView(detail);
+        card.addView(texts);
+
+        if (places != null) {
+            final File place = places.get(index);
+            if (place != null) {
+                detail.setText("Открыть");
+                card.setOnClickListener(v -> showBrowser(place));
+            } else {
+                detail.setText("Приложения");
+                card.setOnClickListener(v -> appManager());
+            }
+        } else if (collections != null) {
+            if (index == 0) {
+                detail.setText("Быстрый доступ");
+                card.setOnClickListener(v -> favorites());
+            } else {
+                detail.setText("Скрытая папка");
+                card.setOnClickListener(v -> {
+                    File secret = new File(Environment.getExternalStorageDirectory(), ".NeymisSecret");
+                    secret.mkdirs();
+                    showBrowser(secret);
+                });
+            }
+        } else {
+            if (index == 0) {
+                File root = Environment.getExternalStorageDirectory();
+                StatFs stat = new StatFs(root.getPath());
+                detail.setText(FileUtils.human(stat.getTotalBytes()));
+            } else {
+                detail.setText("Открыть");
+            }
+            card.setOnClickListener(v -> showBrowser(Environment.getExternalStorageDirectory()));
+        }
+        return card;
+    }
+
+    private void showRecentAll() {
+        File download = new File(Environment.getExternalStorageDirectory(), "Download");
+        showBrowser(download);
+    }
+
+    private void showMainMenu() {
+        String[] items = {"Создать папку", "Создать файл", "Сортировка", "Скрытые файлы",
+                "Избранное", "Память", "Приложения", "Тема", "О программе"};
+        new AlertDialog.Builder(this).setTitle("Меню").setItems(items, (dialog, which) -> {
+            switch (which) {
+                case 0: createFolder(); break;
+                case 1: createFile(); break;
+                case 2: chooseSort(); break;
+                case 3: toggleHidden(); break;
+                case 4: favorites(); break;
+                case 5: storageInfo(); break;
+                case 6: appManager(); break;
+                case 7: chooseTheme(); break;
+                case 8: about(); break;
+            }
+        }).show();
+    }
+
+    private void about() {
+        new AlertDialog.Builder(this).setTitle("Neymis Files")
+                .setMessage("Файловый менеджер с открытым кодом.\nВерсия 1.1\nЛицензия MIT\n"
+                        + "Исходники: github.com/s93240056-boop/neymis-files")
+                .setPositiveButton("OK", null).show();
+    }
+
+    // ---------- обзор файлов -------------------------------------------------
 
     private void requestStorageAccess() {
         if (Build.VERSION.SDK_INT < 30 || Environment.isExternalStorageManager()) return;
@@ -178,13 +543,29 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    private static boolean isImage(String name) {
+        String n = name.toLowerCase();
+        return n.endsWith(".png") || n.endsWith(".jpg") || n.endsWith(".jpeg") || n.endsWith(".webp");
+    }
+
+    private static boolean isVideo(String name) {
+        String n = name.toLowerCase();
+        return n.endsWith(".mp4") || n.endsWith(".mkv") || n.endsWith(".avi") || n.endsWith(".webm");
+    }
+
+    private static boolean isAudio(String name) {
+        String n = name.toLowerCase();
+        return n.endsWith(".mp3") || n.endsWith(".wav") || n.endsWith(".ogg") || n.endsWith(".m4a");
+    }
+
     private static String mime(String name) {
+        if (isImage(name)) return "image/*";
+        if (isVideo(name)) return "video/*";
+        if (isAudio(name)) return "audio/*";
         String lower = name.toLowerCase();
         if (lower.endsWith(".apk")) return "application/vnd.android.package-archive";
         if (lower.endsWith(".zip")) return "application/zip";
         if (lower.endsWith(".txt") || lower.endsWith(".md")) return "text/plain";
-        if (lower.endsWith(".png")) return "image/png";
-        if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
         if (lower.endsWith(".pdf")) return "application/pdf";
         return "*/*";
     }
@@ -232,7 +613,7 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
-        menu.add(0, 10, 0, "Создать папку").setVisible(true);
+        menu.add(0, 10, 0, "Создать папку");
         menu.add(0, 11, 1, "Создать файл");
         menu.add(0, 12, 2, "Поиск здесь");
         menu.add(0, 13, 3, "Поиск везде");
@@ -255,16 +636,17 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     public boolean onPrepareOptionsMenu(Menu menu) {
+        boolean browsing = browserView.getVisibility() == View.VISIBLE;
         for (int i = 10; i <= 22; i++) {
             MenuItem item = menu.findItem(i);
             if (item != null) {
                 boolean visible = !(i == 22 && clipboard.isEmpty());
-                item.setVisible(!selectionMode && visible);
+                item.setVisible(browsing && !selectionMode && visible);
             }
         }
         for (int i = 30; i <= 35; i++) {
             MenuItem item = menu.findItem(i);
-            if (item != null) item.setVisible(selectionMode);
+            if (item != null) item.setVisible(browsing && selectionMode);
         }
         return super.onPrepareOptionsMenu(menu);
     }
@@ -310,9 +692,7 @@ public class MainActivity extends AppCompatActivity {
         EditText input = new EditText(this);
         input.setInputType(InputType.TYPE_CLASS_TEXT);
         input.setText(initial == null ? "" : initial);
-        new AlertDialog.Builder(this)
-                .setTitle(title)
-                .setView(input)
+        new AlertDialog.Builder(this).setTitle(title).setView(input)
                 .setNegativeButton("Отмена", null)
                 .setPositiveButton("OK", (dialog, which) -> action.run(input.getText().toString().trim()))
                 .show();
@@ -366,12 +746,9 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void confirm(String message, Runnable action) {
-        new AlertDialog.Builder(this)
-                .setTitle("Подтверждение")
-                .setMessage(message)
+        new AlertDialog.Builder(this).setTitle("Подтверждение").setMessage(message)
                 .setNegativeButton("Отмена", null)
-                .setPositiveButton("OK", (dialog, which) -> action.run())
-                .show();
+                .setPositiveButton("OK", (dialog, which) -> action.run()).show();
     }
 
     private void setClipboard(File file, boolean cutMode) {
@@ -483,9 +860,8 @@ public class MainActivity extends AppCompatActivity {
 
     private static boolean isText(String name) {
         String lower = name.toLowerCase();
-        return lower.endsWith(".txt") || lower.endsWith(".md")
-                || lower.endsWith(".log") || lower.endsWith(".json")
-                || lower.endsWith(".xml") || lower.endsWith(".csv");
+        return lower.endsWith(".txt") || lower.endsWith(".md") || lower.endsWith(".log")
+                || lower.endsWith(".json") || lower.endsWith(".xml") || lower.endsWith(".csv");
     }
 
     private void editText(File file) {
@@ -497,13 +873,11 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
         EditText input = new EditText(this);
-        input.setInputType(InputType.TYPE_CLASS_TEXT
-                | InputType.TYPE_TEXT_FLAG_MULTI_LINE
+        input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE
                 | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
         input.setMinLines(8);
         input.setText(content);
-        new AlertDialog.Builder(this).setTitle("Редактор: " + file.getName())
-                .setView(input)
+        new AlertDialog.Builder(this).setTitle("Редактор: " + file.getName()).setView(input)
                 .setNegativeButton("Отмена", null)
                 .setPositiveButton("Сохранить", (dialog, which) -> {
                     try {
@@ -516,6 +890,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void search(boolean everywhere) {
+        showBrowser(current);
         prompt("Поиск", "", query -> {
             if (query.isEmpty()) return;
             File root = everywhere ? Environment.getExternalStorageDirectory() : current;
@@ -524,9 +899,7 @@ public class MainActivity extends AppCompatActivity {
             files.addAll(result);
             names.clear();
             names.add("..");
-            for (File file : files) {
-                names.add((file.isDirectory() ? "[DIR] " : "") + file.getName());
-            }
+            for (File file : files) names.add((file.isDirectory() ? "[DIR] " : "") + file.getName());
             adapter.notifyDataSetChanged();
             pathView.setText("Результаты поиска: " + query + " (" + result.size() + ")");
         });
@@ -551,22 +924,15 @@ public class MainActivity extends AppCompatActivity {
 
     private void favorites() {
         File root = Environment.getExternalStorageDirectory();
-        final File[] places = {
-                root,
-                new File(root, "Download"),
-                new File(root, "DCIM"),
-                new File(root, "Pictures"),
-                new File(root, "Documents"),
-                new File(root, "Music"),
-                new File(root, "Movies"),
-                getExternalFilesDir(null)
-        };
+        final File[] places = {root, new File(root, "Download"), new File(root, "DCIM"),
+                new File(root, "Pictures"), new File(root, "Documents"),
+                new File(root, "Music"), new File(root, "Movies"), getExternalFilesDir(null)};
         String[] labels = new String[places.length];
         for (int i = 0; i < places.length; i++) {
             labels[i] = places[i] == null ? "—" : places[i].getAbsolutePath();
         }
         new AlertDialog.Builder(this).setTitle("Избранное").setItems(labels, (dialog, which) -> {
-            if (places[which] != null) show(places[which]);
+            if (places[which] != null) showBrowser(places[which]);
         }).show();
     }
 
@@ -585,11 +951,8 @@ public class MainActivity extends AppCompatActivity {
 
     private void appManager() {
         List<ApplicationInfo> apps = getPackageManager().getInstalledApplications(0);
-        Collections.sort(apps, (a, b) -> {
-            String la = getPackageManager().getApplicationLabel(a).toString();
-            String lb = getPackageManager().getApplicationLabel(b).toString();
-            return la.compareToIgnoreCase(lb);
-        });
+        Collections.sort(apps, (a, b) -> getPackageManager().getApplicationLabel(a).toString()
+                .compareToIgnoreCase(getPackageManager().getApplicationLabel(b).toString()));
         final List<ApplicationInfo> limited = new ArrayList<>();
         for (ApplicationInfo app : apps) {
             if (limited.size() >= 200) break;
@@ -623,11 +986,10 @@ public class MainActivity extends AppCompatActivity {
 
     private void chooseTheme() {
         String[] variants = {"Фиолетово-синий градиент", "Белая", "Тёмная"};
-        new AlertDialog.Builder(this).setTitle("Тема приложения")
-                .setItems(variants, (dialog, which) -> {
-                    prefs.edit().putString(KEY_THEME, String.valueOf(which)).apply();
-                    recreate();
-                }).show();
+        new AlertDialog.Builder(this).setTitle("Тема приложения").setItems(variants, (dialog, which) -> {
+            prefs.edit().putString(KEY_THEME, String.valueOf(which)).apply();
+            recreate();
+        }).show();
     }
 
     private void toast(String message) {
