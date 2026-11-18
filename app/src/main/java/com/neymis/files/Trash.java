@@ -112,7 +112,7 @@ final class Trash {
 
     void remove(Entry entry) {
         List<Entry> entries = read();
-        entries.remove(item -> item.name.equals(entry.name)
+        entries.removeIf(item -> item.name.equals(entry.name)
                 && item.originalPath.equals(entry.originalPath) && item.time == entry.time);
         write(entries);
         FileUtils.delete(entry.file(folder));

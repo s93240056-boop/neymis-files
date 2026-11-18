@@ -379,7 +379,7 @@ public class SafeActivity extends AppCompatActivity {
     private void removeFromSafe(String[] pair) {
         FileUtils.delete(encryptedFile(pair[0]));
         List<String[]> names = readNames();
-        names.remove(item -> item[0].equals(pair[0]));
+        names.removeIf(item -> item[0].equals(pair[0]));
         writeNames(names);
         render();
     }
