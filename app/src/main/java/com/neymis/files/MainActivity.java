@@ -30,6 +30,7 @@ import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ListView;
 import android.widget.ScrollView;
+import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -77,8 +78,13 @@ public class MainActivity extends AppCompatActivity {
     private boolean sortAsc;
     private boolean showHidden;
     private ArrayAdapter<String> adapter;
+    private FileListAdapter listAdapter;
+    private final List<FileListAdapter.Row> rows = new ArrayList<>();
+    private LinearLayout tabsBox;
+    private SeekBar fastScroll;
     private ArrayAdapter<String> gridAdapter;
     private GridView gridView;
+    private ListView listView;
     private Trash trash;
     private TextView pathView;
     private String lastTheme;
@@ -103,9 +109,21 @@ public class MainActivity extends AppCompatActivity {
         trash = new Trash(prefs);
         trash.purgeOld();
 
-        ListView listView = findViewById(R.id.list);
-        adapter = new ArrayAdapter<>(this, android.R.layout.simple_list_item_1, names);
-        listView.setAdapter(adapter);
+        listView = findViewById(R.id.list);
+        listAdapter = new FileListAdapter(this, rows, selected,
+                this::showFileActions, this::selectAll);
+        listView.setAdapter(listAdapter);
+
+        tabsBox = findViewById(R.id.tabs);
+        fastScroll = findViewById(R.id.fastScroll);
+        fastScroll.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override public void onProgressChanged(SeekBar seek, int value, boolean fromUser) {
+                if (!fromUser || listAdapter.isEmpty()) return;
+                listView.setSelection((int) (value / 100f * (listAdapter.getCount() - 1)));
+            }
+            @Override public void onStartTrackingTouch(SeekBar seek) { }
+            @Override public void onStopTrackingTouch(SeekBar seek) { }
+        });
 
         gridView = findViewById(R.id.grid);
         gridAdapter = new ArrayAdapter<>(this, android.R.layout.simple_list_item_1, names);
@@ -115,16 +133,13 @@ public class MainActivity extends AppCompatActivity {
         show(current);
 
         listView.setOnItemClickListener((parent, view, position, id) -> {
-            if (selectionMode && position > 0) {
-                toggleSelected(files.get(position - 1));
+            FileListAdapter.Row row = listAdapter.getItem(position);
+            if (row == null || row.isHeader) return;
+            File file = row.file;
+            if (selectionMode) {
+                toggleSelected(file);
                 return;
             }
-            if (position == 0) {
-                File parentFile = current.getParentFile();
-                if (parentFile != null) show(parentFile);
-                return;
-            }
-            File file = files.get(position - 1);
             if (file.isDirectory()) show(file);
             else open(file);
         });
@@ -519,7 +534,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void about() {
         new AlertDialog.Builder(this).setTitle("Neymis Files")
-                .setMessage("Файловый менеджер с открытым кодом.\nВерсия 1.6\nЛицензия MIT\n"
+                .setMessage("Файловый менеджер с открытым кодом.\nВерсия 1.7\nЛицензия MIT\n"
                         + "Исходники: github.com/s93240056-boop/neymis-files")
                 .setPositiveButton("OK", null).show();
     }
@@ -569,14 +584,56 @@ public class MainActivity extends AppCompatActivity {
     private void refreshNames() {
         names.clear();
         names.add("..");
+        rows.clear();
+        String lastHeader = "";
         for (File file : files) {
             String mark = selected.contains(file) ? "✓ " : "";
             String size = prefs.getBoolean("show_size", true)
                     ? "  ·  " + FileUtils.human(FileUtils.size(file)) : "";
             names.add(mark + (file.isDirectory() ? "[DIR] " : "") + file.getName() + size);
+
+            String header = FileListAdapter.dayHeader(file.lastModified());
+            if (!header.equals(lastHeader)) {
+                rows.add(FileListAdapter.Row.section(header));
+                lastHeader = header;
+            }
+            rows.add(FileListAdapter.Row.item(file));
         }
-        adapter.notifyDataSetChanged();
+        notifyLists();
+        buildTabs();
+    }
+
+    private void notifyLists() {
+        if (listAdapter != null) listAdapter.notifyDataSetChanged();
         if (gridAdapter != null) gridAdapter.notifyDataSetChanged();
+    }
+
+    private void buildTabs() {
+        if (tabsBox == null) return;
+        tabsBox.removeAllViews();
+        List<String> labels = new ArrayList<>();
+        List<File> targets = new ArrayList<>();
+        labels.add("Все");
+        targets.add(current);
+        File[] children = current.listFiles();
+        if (children != null) {
+            for (File child : children) {
+                if (child.isDirectory() && !child.getName().startsWith(".")) {
+                    labels.add(child.getName());
+                    targets.add(child);
+                }
+            }
+        }
+        for (int i = 0; i < labels.size(); i++) {
+            final File target = targets.get(i);
+            TextView tab = new TextView(this);
+            tab.setText(labels.get(i));
+            tab.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
+            tab.setTextColor(i == 0 ? accentColor() : subColor());
+            tab.setPadding(dp(14), dp(12), dp(14), dp(12));
+            tab.setOnClickListener(v -> show(target));
+            tabsBox.addView(tab);
+        }
     }
 
     private void applyGrid() {
@@ -661,8 +718,9 @@ public class MainActivity extends AppCompatActivity {
         super.onCreateContextMenu(menu, v, info);
         if (selectionMode || !(info instanceof AdapterView.AdapterContextMenuInfo)) return;
         int position = ((AdapterView.AdapterContextMenuInfo) info).position;
-        if (position == 0) return;
-        selectedFile = files.get(position - 1);
+        FileListAdapter.Row row = listAdapter.getItem(position);
+        if (row == null || row.isHeader) return;
+        selectedFile = row.file;
         menu.setHeaderTitle(selectedFile.getName());
         menu.add(0, 1, 0, "Открыть");
         menu.add(0, 2, 1, "Поделиться");
@@ -681,8 +739,11 @@ public class MainActivity extends AppCompatActivity {
     @Override
     public boolean onContextItemSelected(MenuItem item) {
         if (selectedFile == null) return super.onContextItemSelected(item);
-        File file = selectedFile;
-        switch (item.getItemId()) {
+        return handleAction(item.getItemId(), selectedFile);
+    }
+
+    private boolean handleAction(int id, File file) {
+        switch (id) {
             case 1: open(file); return true;
             case 2: share(file); return true;
             case 3: setClipboard(file, false); return true;
@@ -695,7 +756,7 @@ public class MainActivity extends AppCompatActivity {
             case 9: editText(file); return true;
             case 10: unzip(file); return true;
             case 11: open(file); return true;
-            default: return super.onContextItemSelected(item);
+            default: return false;
         }
     }
 
@@ -768,6 +829,34 @@ public class MainActivity extends AppCompatActivity {
             case 35: setSelectionMode(false); return true;
             default: return super.onOptionsItemSelected(item);
         }
+    }
+
+    private void showFileActions(File file) {
+        List<String> labels = new ArrayList<>();
+        final List<Integer> ids = new ArrayList<>();
+        labels.add("Открыть"); ids.add(1);
+        labels.add("Поделиться"); ids.add(2);
+        labels.add("Копировать"); ids.add(3);
+        labels.add("Вырезать"); ids.add(4);
+        labels.add("Переименовать"); ids.add(5);
+        labels.add("Удалить в корзину"); ids.add(6);
+        labels.add("Архивировать в ZIP"); ids.add(7);
+        labels.add("Свойства"); ids.add(8);
+        labels.add("В избранное"); ids.add(12);
+        if (file.isFile() && isText(file.getName())) { labels.add("Редактировать"); ids.add(9); }
+        if (file.getName().toLowerCase().endsWith(".zip")) { labels.add("Распаковать"); ids.add(10); }
+        if (file.getName().toLowerCase().endsWith(".apk")) { labels.add("Установить APK"); ids.add(11); }
+        new AlertDialog.Builder(this).setTitle(file.getName())
+                .setItems(labels.toArray(new String[0]),
+                        (dialog, which) -> handleAction(ids.get(which), file)).show();
+    }
+
+    private void selectAll() {
+        if (!selectionMode) setSelectionMode(true);
+        selected.clear();
+        selected.addAll(files);
+        refreshNames();
+        toast("Выбрано: " + selected.size());
     }
 
     private void setSelectionMode(boolean on) {
@@ -1014,7 +1103,7 @@ public class MainActivity extends AppCompatActivity {
             names.clear();
             names.add("..");
             for (File file : files) names.add((file.isDirectory() ? "[DIR] " : "") + file.getName());
-            adapter.notifyDataSetChanged();
+            notifyLists();
             pathView.setText("Результаты поиска: " + query + " (" + result.size() + ")");
         });
     }
@@ -1052,7 +1141,7 @@ public class MainActivity extends AppCompatActivity {
                         names.add((file.isDirectory() ? "[DIR] " : "") + file.getName()
                                 + "  ·  " + FileUtils.human(file.length()));
                     }
-                    adapter.notifyDataSetChanged();
+                    notifyLists();
                     if (gridAdapter != null) gridAdapter.notifyDataSetChanged();
                     showBrowser(current);
                     pathView.setText("Результаты: " + result.size());
