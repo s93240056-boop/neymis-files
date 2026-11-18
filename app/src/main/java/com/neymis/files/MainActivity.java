@@ -519,7 +519,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void about() {
         new AlertDialog.Builder(this).setTitle("Neymis Files")
-                .setMessage("Файловый менеджер с открытым кодом.\nВерсия 1.1\nЛицензия MIT\n"
+                .setMessage("Файловый менеджер с открытым кодом.\nВерсия 1.5\nЛицензия MIT\n"
                         + "Исходники: github.com/s93240056-boop/neymis-files")
                 .setPositiveButton("OK", null).show();
     }
