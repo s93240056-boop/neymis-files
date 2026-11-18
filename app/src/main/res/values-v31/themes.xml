@@ -4,6 +4,5 @@
         <item name="colorPrimary">@android:color/system_accent1_500</item>
         <item name="colorPrimaryDark">@android:color/system_accent1_700</item>
         <item name="colorAccent">@android:color/system_accent1_500</item>
-        <item name="android:windowBackground">@android:color/system_background_50</item>
     </style>
 </resources>
