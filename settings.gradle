@@ -15,3 +15,5 @@ dependencyResolutionManagement {
 
 rootProject.name = "Neymis Files"
 include(":app")
+
+include ':neymis-core'

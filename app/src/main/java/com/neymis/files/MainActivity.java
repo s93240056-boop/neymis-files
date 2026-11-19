@@ -1,5 +1,8 @@
 package com.neymis.files;
 
+import com.neymis.core.Apps;
+import com.neymis.core.Intents;
+
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.ApplicationInfo;
@@ -534,7 +537,8 @@ public class MainActivity extends AppCompatActivity {
 
     private void showMainMenu() {
         String[] items = {"Создать папку", "Создать файл", "Сортировка", "Скрытые файлы",
-                "Избранное", "Память", "Приложения", "Настройки", "О программе"};
+                "Избранное", "Память", "Приложения", "Настройки", "О программе",
+                "Приложения Neymis"};
         new AlertDialog.Builder(this).setTitle("Меню").setItems(items, (dialog, which) -> {
             switch (which) {
                 case 0: createFolder(); break;
@@ -546,14 +550,26 @@ public class MainActivity extends AppCompatActivity {
                 case 6: appManager(); break;
                 case 7: startActivity(new Intent(this, SettingsActivity.class)); break;
                 case 8: about(); break;
+                case 9: showNeymisApps(); break;
             }
         }).show();
     }
 
+    private void showNeymisApps() {
+        new AlertDialog.Builder(this)
+                .setTitle("Приложения Neymis")
+                .setItems(Apps.NAMES, (dialog, which) -> {
+                    if (!Intents.openApp(this, Apps.PACKAGES[which])) {
+                        Intents.openWeb(this, Apps.REPOS[which]);
+                    }
+                })
+                .setNegativeButton("Закрыть", null)
+                .show();
+    }
+
     private void about() {
         new AlertDialog.Builder(this).setTitle("Neymis Files")
-                .setMessage("Файловый менеджер с открытым кодом.\nВерсия 2.0\nЛицензия MIT\n"
-                        + "Исходники: github.com/s93240056-boop/neymis-files")
+                .setMessage(Apps.about("Neymis Files", "2.1"))
                 .setPositiveButton("OK", null).show();
     }
 
